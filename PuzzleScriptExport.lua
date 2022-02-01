@@ -45,8 +45,13 @@ end
 # script
 ]]
 
-local function getTileDataString(img,x,y,w,h,prefix)
-  -- pq("getTileDataString",x,y,w,h)
+local function getTileDataString(img,zone)
+  -- pq("getTileDataString",zone)
+  local x=zone.bounds.x
+  local y=zone.bounds.y
+  local w=zone.bounds.width
+  local h=zone.bounds.height
+
   local pal = {} -- array of colors
   local body = ""
   for ty = 0,h-1 do
@@ -78,15 +83,15 @@ local function getTileDataString(img,x,y,w,h,prefix)
         end
       end
 
-      body = body .. code
+      body = body..code
     end
-    body = body .. "\n"
+    body = body.."\n"
   end
 
   if #pal>0 then
-    local header = prefix..getId() .. "\n"
+    local header = zone.name.."\n"
     for i=1,#pal do
-      header = header .. pal[i] .. " "
+      header = header..pal[i].." "
     end
     return header.."\n"..body
   end
@@ -101,21 +106,35 @@ end
 --   00110
 --   0110.
 --   110..
-local function exportTiles(sprite,subrect,gridw,gridh,prefix)
-  -- pq("exportTiles",subrect,gridw,gridh)
+local function exportTiles(sprite,zones)
   local img = Image(sprite.spec)
   img:drawSprite(sprite, 1)
 
-  local result = {}
-  for y = subrect.y,subrect.y+subrect.height-gridh,gridh do
-    for x = subrect.x,subrect.x+subrect.width-gridw,gridw do
-      local str = getTileDataString(img,x,y,gridw,gridh,prefix)
-      if str then
-        table.insert(result,str)
-      end
+  local result={}
+  for i,zone in ipairs(zones) do
+    local str = getTileDataString(img,zone)
+    if str then
+      table.insert(result,str)
     end
   end
   return result
+end
+
+-- returns a list of {name=<string>,bounds=<Rectangle>}s
+local function findZones(subrect,gridw,gridh,prefix)
+  -- pq("findZones",subrect,gridw,gridh)
+
+  -- note: subrect might not be an exact multiple of {gridw, gridh}
+  local zones = {}
+  for y = subrect.y,subrect.y+subrect.height-gridh,gridh do
+    for x = subrect.x,subrect.x+subrect.width-gridw,gridw do
+      table.insert(zones,{
+        name=prefix..getId(),
+        bounds=Rectangle{x=x,y=y,width=gridw,height=gridh},
+      })
+    end
+  end
+  return zones
 end
 
 -- writes a list of strings to the given file
@@ -133,7 +152,7 @@ end
 
 -- the main function; this organizes the settings and then
 -- calls exportTiles() and writeTiles()
-local function export(filename,usegrid,prefix)
+local function export(filename,gridtype,prefix)
   local sprite = app.activeSprite
   -- Check constrains
   if sprite == nil then
@@ -146,22 +165,34 @@ local function export(filename,usegrid,prefix)
     return
   end
 
-  local gridw=5
-  local gridh=5
   local subrect = sprite.selection.isEmpty and sprite.bounds or sprite.selection.bounds
-  if usegrid then
-    gridw=sprite.gridBounds.width
-    gridh=sprite.gridBounds.height
+
+  local zones
+  if gridtype=="5x5" then
+    local gridw=5
+    local gridh=5
+    zones=findZones(subrect,gridw,gridh,prefix)
+  elseif gridtype=="aseprite grid" then
+    local gridw=sprite.gridBounds.width
+    local gridh=sprite.gridBounds.height
     local oldx = subrect.x
     local oldy = subrect.y
     subrect.x=math.ceil(subrect.x/gridw)*gridw
     subrect.y=math.ceil(subrect.y/gridh)*gridh
     subrect.width=subrect.width-(subrect.x-oldx)
     subrect.height=subrect.height-(subrect.y-oldy)
+    zones=findZones(subrect,gridw,gridh,prefix)
+  elseif gridtype=="slices" then
+    zones={}
+    for i,slice in ipairs(sprite.slices) do
+      table.insert(zones,{
+        name=slice.name,
+        bounds=slice.bounds,
+      })
+    end
   end
-  -- note: subrect might not be an exact multiple of {gridw, gridh}
 
-  local tiles = exportTiles(sprite,subrect,gridw,gridh,prefix)
+  local tiles = exportTiles(sprite,zones)
   writeTiles(tiles,filename)
   print("exported "..(#tiles).." tiles")
 end
@@ -183,15 +214,16 @@ dlg:entry{
   label="prefix",
   text="tile",
 }
-dlg:check{
-  id="usegrid",
-  text="use aseprite grid",
-  selected=true,
+dlg:combobox{
+  id="gridtype",
+  label="grid type",
+  option="5x5",
+  options={ "5x5","aseprite grid","slices" },
 }
 dlg:button{text="Export", onclick=function()
-  local filename,usegrid,prefix = dlg.data.exportFile,dlg.data.usegrid,dlg.data.prefix
+  local filename,gridtype,prefix = dlg.data.exportFile,dlg.data.gridtype,dlg.data.prefix
   if #filename>0 then
-    export(filename,usegrid,prefix)
+    export(filename,gridtype,prefix)
   else
     print("no file chosen")
   end
