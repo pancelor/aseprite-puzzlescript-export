@@ -68,6 +68,10 @@ If you select a rectangle in your image and then press the "Export" button, only
 
 (why would you want non-5x5 sprites? there are [PuzzleScript forks](https://auroriax.github.io/PuzzleScript/editor.html) out there that allow differently-sized sprites)
 
+#### slices!
+
+![aseprite screenshot](./docs/slices.png)
+
 ### Transparent Sprites
 
 This script will consider any color with alpha value 0 as transparent. Make sure the layer you're exporting from is a "Layer", not a "Background".
