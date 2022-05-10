@@ -48,24 +48,9 @@ local function getId()
   return _id
 end
 
--- create an image that we can extract colors from
-function prepareImage(sprite,layeronly)
-  local img=Image(sprite.spec)
-  if layeronly then
-    local cel=app.activeCel
-    if not app.activeCel then
-      app.alert("error: current layer is empty")
-      return
-    end
-    img:drawImage(app.activeCel.image, app.activeCel.position)
-  else
-    img:drawSprite(sprite, app.activeFrame)
-  end
-  return img
-end
-
-local function getTileDataString(img,zone)
-  -- pq("getTileDataString",zone)
+-- convert a single "zone" into a string
+local function exportZone(img,zone)
+  -- pq("exportZone",zone)
   local x=zone.bounds.x
   local y=zone.bounds.y
   local w=zone.bounds.width
@@ -113,32 +98,26 @@ local function getTileDataString(img,zone)
   end
 end
 
--- returns a list of strings
--- each string looks something like this:
---   tile12
---   #ff8000 #00ff80
---   ..010
---   .0010
---   00110
---   0110.
---   110..
-local function exportTiles(img,zones)
-  local result={}
-  for i,zone in ipairs(zones) do
-    local str = getTileDataString(img,zone)
-    if str then
-      table.insert(result,str)
-    end
+local function defaultGridType()
+  if #app.activeSprite.slices>0 then
+    return "slices"
+  elseif app.activeSprite.gridBounds.width~=16 then
+    return "aseprite grid"
+  else
+    return "5x5"
   end
-  return result
 end
+
+--[[
+# script
+]]
 
 -- returns a list of "zones" that fit into the current selection of sprite
 --   a "zone" is a {name=<string>,bounds=<Rectangle>} object
 -- sel may be non-rectangular (e.g. multiple rectangles)
 --   but support isn't great (e.g. the grid anchor will not reset between
 --   multiple selections)
-function findZones(sprite,gridtype,prefix)
+local function findZones(sprite,gridtype,prefix)
   local zones={}
 
   local sel=sprite.selection
@@ -185,6 +164,42 @@ function findZones(sprite,gridtype,prefix)
   return zones
 end
 
+-- create an image that we can extract colors from
+local function prepareImage(sprite,layeronly)
+  local img=Image(sprite.spec)
+  if layeronly then
+    local cel=app.activeCel
+    if not app.activeCel then
+      app.alert("error: current layer is empty")
+      return
+    end
+    img:drawImage(app.activeCel.image, app.activeCel.position)
+  else
+    img:drawSprite(sprite, app.activeFrame)
+  end
+  return img
+end
+
+-- returns a list of strings
+-- each string looks something like this:
+--   tile12
+--   #ff8000 #00ff80
+--   ..010
+--   .0010
+--   00110
+--   0110.
+--   110..
+local function exportTiles(img,zones)
+  local result={}
+  for i,zone in ipairs(zones) do
+    local str = exportZone(img,zone)
+    if str then
+      table.insert(result,str)
+    end
+  end
+  return result
+end
+
 -- writes a list of strings to the given file
 local function writeTiles(tiles,filename)
   local f = io.open(filename, "w")
@@ -198,39 +213,9 @@ local function writeTiles(tiles,filename)
   io.close(f)
 end
 
--- the main function; this organizes the settings and then
--- calls exportTiles() and writeTiles()
-local function export(filename,gridtype,prefix,layeronly)
-  local sprite = app.activeSprite
-  -- Check constrains
-  if sprite == nil then
-    app.alert("error: no sprite found")
-    return
-  end
-
-  local zones = findZones(sprite,gridtype,prefix)
-  local img = prepareImage(sprite,layeronly)
-  if img then
-    local tiles = exportTiles(img,zones)
-    writeTiles(tiles,filename)
-
-    app.alert((#tiles).." tiles exported")
-  end
-end
-
 --[[
 # main
 ]]
-
-function defaultGridType()
-  if #app.activeSprite.slices>0 then
-    return "slices"
-  elseif app.activeSprite.gridBounds.width~=16 then
-    return "aseprite grid"
-  else
-    return "5x5"
-  end
-end
 
 local dlg = Dialog("PuzzleScript Sprite Export")
 dlg:file{
@@ -253,7 +238,19 @@ dlg:check{
 dlg:button{text="Export", onclick=function()
   local filename,gridtype,prefix,layeronly = dlg.data.exportFile,dlg.data.gridtype,"aseprite",dlg.data.layeronly
   if #filename>0 then
-    export(filename,gridtype,prefix,layeronly)
+    local sprite = app.activeSprite
+    if not sprite then
+      app.alert("error: no sprite found")
+      return
+    end
+
+    local zones = findZones(sprite,gridtype,prefix)
+    local img = prepareImage(sprite,layeronly)
+    if not img then return end
+    local tiles = exportTiles(img,zones)
+    writeTiles(tiles,filename)
+
+    app.alert((#tiles).." tiles exported")
   else
     app.alert("error: no file chosen")
   end
