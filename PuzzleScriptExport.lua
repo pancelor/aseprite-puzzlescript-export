@@ -89,6 +89,10 @@ local function exportZone(img,zone)
     body = body.."\n"
   end
 
+  if #pal>10 then
+    print("error: too many colors in sprite at x="..x.." y="..y)
+  end
+
   if #pal>0 then
     local header = zone.name.."\n"
     for i=1,#pal do
