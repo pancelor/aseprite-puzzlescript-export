@@ -72,7 +72,9 @@ If you select a rectangle in your image and then press the "Export" button, only
 
 (why would you want non-5x5 sprites? there are [PuzzleScript](https://auroriax.github.io/PuzzleScript/editor.html) [forks](https://github.com/broken-sign-games/PuzzleScript) out there that allow differently-sized sprites)
 
-#### slices!
+## Other notes
+
+### Slices!
 
 [Named slices](https://www.aseprite.org/docs/slices/) are supported.
 
@@ -82,7 +84,7 @@ If you select a rectangle in your image and then press the "Export" button, only
 
 This script will consider any color with alpha value 0 as transparent. Make sure the layer you're exporting from is a "Layer", not a "Background". (Right click on a background layer > Convert To > Layer)
 
-### feature wishlist
+### Feature Wishlist
 
 Will these be implemented? We'll see! If you decide to implement these yourself, feel free to open a pull request!
 
@@ -90,4 +92,4 @@ Will these be implemented? We'll see! If you decide to implement these yourself,
 - [x] add support for indexed/palettized images
 - [x] add ability to export the current layer only
 - [ ] deduplicate exported tiles
-- [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation
+- [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation (

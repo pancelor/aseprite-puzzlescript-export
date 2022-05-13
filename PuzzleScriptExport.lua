@@ -5,6 +5,19 @@
 -- https://github.com/aseprite/api/
 
 --[[
+note: this extenstion does not deal with making maps using the aseprite
+"tilemap" feature I don't think it would fit into my personal workflow --
+sometimes you want to make tweaks in the official editor, and how would
+you import those back into aseprite? it's doable, but it sounds awkward
+
+is it useful enough to add anyway? eh, maybe
+
+the docs don't exist yet, but see https://github.com/aseprite/api/issues/66
+]]
+
+
+
+--[[
 # debugging
 ]]
 
@@ -241,22 +254,16 @@ dlg:check{
 }
 dlg:button{text="Export", onclick=function()
   local filename,gridtype,prefix,layeronly = dlg.data.exportFile,dlg.data.gridtype,"aseprite",dlg.data.layeronly
-  if #filename>0 then
-    local sprite = app.activeSprite
-    if not sprite then
-      app.alert("error: no sprite found")
-      return
-    end
 
-    local zones = findZones(sprite,gridtype,prefix)
-    local img = prepareImage(sprite,layeronly)
-    if not img then return end
-    local tiles = exportTiles(img,zones)
-    writeTiles(tiles,filename)
+  if #filename==0 then return app.alert("error: no file chosen") end
+  if not app.activeSprite then return app.alert("error: no sprite found") end
 
-    app.alert((#tiles).." tiles exported")
-  else
-    app.alert("error: no file chosen")
-  end
+  local zones = findZones(app.activeSprite,gridtype,prefix)
+  local img = prepareImage(app.activeSprite,layeronly)
+  if not img then return end
+  local tiles = exportTiles(img,zones)
+  writeTiles(tiles,filename)
+
+  app.alert((#tiles).." tiles exported")
 end}
 dlg:show{wait=false}
