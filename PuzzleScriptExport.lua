@@ -177,22 +177,24 @@ local function gatherZones(sprite,gridtype)
   local sel=sprite.selection
   -- rect: the subrectangle to export tiles from
   local rect=sel.isEmpty and sprite.bounds or sel.bounds
-  local rect=sprite.bounds
   local zonew
   local zoneh
   if gridtype=="5x5" then
     zonew=5
     zoneh=5
+    -- if your selection isn't exact multiples of 5, extra tiles will be created
+    -- on the edge. these tiles will be a full 5x5
   elseif gridtype=="aseprite grid" then
     zonew=sprite.gridBounds.width
     zoneh=sprite.gridBounds.height
     -- selection correction
-    local oldx = rect.x
-    local oldy = rect.y
-    rect.x=math.ceil(rect.x/zonew)*zonew
-    rect.y=math.ceil(rect.y/zoneh)*zoneh
-    rect.width=rect.width-(rect.x-oldx)
-    rect.height=rect.height-(rect.y-oldy)
+    -- pq(rect)
+    local x1=math.ceil(rect.x/zonew)*zonew
+    local y1=math.ceil(rect.y/zoneh)*zoneh
+    local x2p=math.floor((rect.x+rect.width-1)/zonew)*zonew -- 1 past x2
+    local y2p=math.floor((rect.y+rect.height-1)/zoneh)*zoneh
+    rect = Rectangle(x1,y1,x2p-x1,y2p-y1)
+    -- pq(rect)
   elseif gridtype=="slices" then
     for i,slice in ipairs(sprite.slices) do
       if rect:contains(slice.bounds) then
@@ -205,19 +207,14 @@ local function gatherZones(sprite,gridtype)
     return zones
   end
 
-  -- each zone.bounds.width/height will be zonew/zoneh
-  -- any leftover space in sel (not enough for a full zonew x zoneh zone)
-  --   will be ignored
   for y=rect.y,rect.y+rect.height-1,zoneh do
     for x=rect.x,rect.x+rect.width-1,zonew do
+      local name="aseprite"..getId()
       local bounds=Rectangle{x=x,y=y,width=zonew,height=zoneh}
-      if sel.isEmpty or sel:contains(bounds) then
-        local name="aseprite"..getId()
-        add(zones,{
-          name=name,
-          bounds=bounds,
-        })
-      end
+      add(zones,{
+        name=name,
+        bounds=bounds,
+      })
     end
   end
   return zones
