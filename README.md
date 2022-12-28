@@ -91,5 +91,6 @@ Will these be implemented? We'll see! If you decide to implement these yourself,
 - [x] add support for [slices](https://www.aseprite.org/docs/slices/)
 - [x] add support for indexed/palettized images
 - [x] add ability to export the current layer only
+- [x] add support for [tilemap](https://www.aseprite.org/docs/tilemap) layers
 - [ ] deduplicate exported tiles
-- [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation (
+- [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation (not just sprite drawing)

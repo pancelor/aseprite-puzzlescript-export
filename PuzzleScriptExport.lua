@@ -2,6 +2,7 @@
 --  by pancelor, 2022-02-01
 
 -- handy link to the aseprite api docs:
+-- https://www.aseprite.org/api/
 -- https://github.com/aseprite/api/
 
 --[[
@@ -18,34 +19,68 @@ the docs don't exist yet, but see https://github.com/aseprite/api/issues/66
 
 
 --[[
-# debugging
+# libpance
 ]]
 
-local function quote(...)
+local qindent=0
+function qq(...)
   local tbl={...}
   local s=""
   for i=1,#tbl do
     local o=tbl[i]
-    if type(o) == 'table' then
-      s=s..'{ '
+    if type(o)=='table' then
+      s=s..'{\n'
+      qindent=qindent+2
+      assert(qindent<50)
+      local tab=string.rep(" ",qindent)
       for k,v in pairs(o) do
-        if type(k) ~= 'number' then k = '"'..k..'"' end
-        s=s ..'['..k..'] = '..quote(v)..','
+        s=s..tab..k..'='..qq(v)..'\n'
       end
-      s=s..'}, '
+      qindent=qindent-2
+      s=s..string.rep(" ",qindent)..'} '
     else
-      s=s..tostring(o)..", "
+      s=s..tostring(o).." "
     end
   end
   return s
 end
-local function pq(...)
-  print(quote(...))
+function pq(...)
+  print(qq(...))
+end
+function qa(l)
+  return "{"..table.concat(l,",").."}"
 end
 
-local function includes(tbl,elem)
-  for k,v in pairs(tbl) do
-    if v==elem then return k end
+-- returns any key in tab s.t tab[key]==x
+function find(tab,x)
+  for k,v in pairs(tab) do
+    if v==x then return k end
+  end
+end
+function ifind(tab,x)
+  for i=1,#tab do
+    if tab[i]==x then return i end
+  end
+end
+
+function add(tab,elem)
+  table.insert(tab,elem)
+  return elem
+end
+function deli(tab,ix)
+  return table.remove(tab,ix)
+end
+
+function mid(a,b,c)
+  c=c or 0
+  b=b or 1
+  local ab,bc,ac=a<b,b<c,a<c
+  if ab==bc then
+    return b
+  elseif bc==ac then
+    return a
+  else
+    return c
   end
 end
 
@@ -73,27 +108,29 @@ local function exportZone(img,zone)
   local body = ""
   for ty = 0,h-1 do
     for tx = 0,w-1 do
+      -- pqt = ty==0 and tx==0 and pq or function()end
+
       local hexcode,transparent
       do
         local pix = img:getPixel(x+tx, y+ty)
         local color = Color(pix)
         hexcode = string.format("#%02x%02x%02x", color.red, color.green, color.blue)
         transparent = color.alpha==0 or pix==0
-        -- pq(pix,"|",color.red,color.green,color.blue,color.alpha)
+        -- pqt(pix,"|",color.red,color.green,color.blue,color.alpha)
       end
 
       local code
       if transparent then
         code = "."
       else
-        local existing = includes(pal,hexcode)
+        local existing = find(pal,hexcode)
         if existing then
           -- old color
           code = existing-1
         else
           -- new color found
           code = #pal
-          table.insert(pal,hexcode)
+          add(pal,hexcode)
         end
       end
 
@@ -134,12 +171,13 @@ end
 -- sel may be non-rectangular (e.g. multiple rectangles)
 --   but support isn't great (e.g. the grid anchor will not reset between
 --   multiple selections)
-local function findZones(sprite,gridtype,prefix)
+local function gatherZones(sprite,gridtype)
   local zones={}
 
   local sel=sprite.selection
   -- rect: the subrectangle to export tiles from
   local rect=sel.isEmpty and sprite.bounds or sel.bounds
+  local rect=sprite.bounds
   local zonew
   local zoneh
   if gridtype=="5x5" then
@@ -148,6 +186,7 @@ local function findZones(sprite,gridtype,prefix)
   elseif gridtype=="aseprite grid" then
     zonew=sprite.gridBounds.width
     zoneh=sprite.gridBounds.height
+    -- selection correction
     local oldx = rect.x
     local oldy = rect.y
     rect.x=math.ceil(rect.x/zonew)*zonew
@@ -155,12 +194,13 @@ local function findZones(sprite,gridtype,prefix)
     rect.width=rect.width-(rect.x-oldx)
     rect.height=rect.height-(rect.y-oldy)
   elseif gridtype=="slices" then
-    -- note ignores selection
     for i,slice in ipairs(sprite.slices) do
-      table.insert(zones,{
-        name=slice.name,
-        bounds=slice.bounds,
-      })
+      if rect:contains(slice.bounds) then
+        add(zones,{
+          name=slice.name,
+          bounds=slice.bounds,
+        })
+      end
     end
     return zones
   end
@@ -170,10 +210,12 @@ local function findZones(sprite,gridtype,prefix)
   --   will be ignored
   for y=rect.y,rect.y+rect.height-1,zoneh do
     for x=rect.x,rect.x+rect.width-1,zonew do
-      if sel.isEmpty or (sel:contains(x,y) and sel:contains(x+zonew-1,y+zoneh-1)) then
-        table.insert(zones,{
-          name=prefix..getId(),
-          bounds=Rectangle{x=x,y=y,width=zonew,height=zoneh},
+      local bounds=Rectangle{x=x,y=y,width=zonew,height=zoneh}
+      if sel.isEmpty or sel:contains(bounds) then
+        local name="aseprite"..getId()
+        add(zones,{
+          name=name,
+          bounds=bounds,
         })
       end
     end
@@ -181,19 +223,60 @@ local function findZones(sprite,gridtype,prefix)
   return zones
 end
 
+-- https://github.com/dacap/export-aseprite-file/blob/master/export.lua#L125-L132
+local function get_tileset_for_layer(layer)
+  for i,tileset in ipairs(layer.sprite.tilesets) do
+    if layer.tileset == tileset then
+      return tileset
+    end
+  end
+end
+
+-- there's gotta be a better way to convert a tilemap cel into pixels, right?
+-- returns: an Image
+local function renderTilemapCel(cel)
+  local tilemap=cel.image
+  assert(tilemap.colorMode==ColorMode.TILEMAP)
+  assert(cel.sprite.tilesets)
+  assert(#cel.sprite.tilesets>0,"error: no tilesets found on a tilemap layer")
+
+  -- uhhh apparently this is 2 for me? very strange
+  -- pq(#cel.sprite.tilesets)
+  -- pq(cel.sprite.tilesets)
+  -- assert(#cel.sprite.tilesets==1,"error: multiple tilesets is not supported")
+
+  local tileset = get_tileset_for_layer(cel.layer)
+  assert(tileset)
+  local size = tileset.grid.tileSize
+  local img = Image(tilemap.width*size.width,tilemap.height*size.height)
+  for ty=0,tilemap.height-1 do
+    for tx=0,tilemap.width-1 do
+      local fakepixel=tilemap:getPixel(tx,ty)
+      local tileix=app.pixelColor.tileI(fakepixel)
+      local tileimg=tileset:getTile(tileix)
+      img:drawImage(tileimg,tx*size.width,ty*size.height)
+    end
+  end
+  return img
+end
+
 -- create an image that we can extract colors from
 local function prepareImage(sprite,layeronly)
-  local img=Image(sprite.spec)
+  local img=Image(sprite.width,sprite.height) --iirc we want this instead of sprite.spec to drop ColorMode info and become RGB
   if layeronly then
-    local cel=app.activeCel
     if not app.activeCel then
       app.alert("error: current layer is empty")
       return
     end
-    img:drawImage(app.activeCel.image, app.activeCel.position)
+    if app.activeCel.image.colorMode == ColorMode.TILEMAP then
+      img:drawImage(renderTilemapCel(app.activeCel))
+    else
+      img:drawImage(app.activeCel.image, app.activeCel.position)
+    end
   else
     img:drawSprite(sprite, app.activeFrame)
   end
+
   return img
 end
 
@@ -206,19 +289,21 @@ end
 --   00110
 --   0110.
 --   110..
-local function exportTiles(img,zones)
+local function exportZones(img,zones)
   local result={}
   for i,zone in ipairs(zones) do
     local str = exportZone(img,zone)
     if str then
-      table.insert(result,str)
+      add(result,str)
     end
   end
   return result
 end
 
 -- writes a list of strings to the given file
-local function writeTiles(tiles,filename)
+local function writeZones(tiles,filename)
+  if #filename==0 then return end
+
   local f = io.open(filename, "w")
   io.output(f)
 
@@ -253,16 +338,15 @@ dlg:check{
   label="active layer only",
 }
 dlg:button{text="Export", onclick=function()
-  local filename,gridtype,prefix,layeronly = dlg.data.exportFile,dlg.data.gridtype,"aseprite",dlg.data.layeronly
+  local filename,gridtype,layeronly = dlg.data.exportFile,dlg.data.gridtype,dlg.data.layeronly
 
-  if #filename==0 then return app.alert("error: no file chosen") end
   if not app.activeSprite then return app.alert("error: no sprite found") end
 
-  local zones = findZones(app.activeSprite,gridtype,prefix)
+  local zones = gatherZones(app.activeSprite,gridtype)
   local img = prepareImage(app.activeSprite,layeronly)
-  if not img then return end
-  local tiles = exportTiles(img,zones)
-  writeTiles(tiles,filename)
+  local tiles = exportZones(img,zones)
+  if #filename==0 then return app.alert("error: no file chosen") end
+  writeZones(tiles,filename)
 
   app.alert((#tiles).." tiles exported")
 end}
