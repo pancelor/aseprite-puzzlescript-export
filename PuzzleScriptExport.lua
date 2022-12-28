@@ -104,10 +104,10 @@ local function exportZone(img,zone)
   local w=zone.bounds.width
   local h=zone.bounds.height
 
-  local pal = {} -- array of colors
-  local body = ""
-  for ty = 0,h-1 do
-    for tx = 0,w-1 do
+  local pal={} -- array of colors
+  local body=""
+  for ty=0,h-1 do
+    for tx=0,w-1 do
       -- pqt = ty==0 and tx==0 and pq or function()end
 
       local hexcode,transparent
@@ -144,11 +144,7 @@ local function exportZone(img,zone)
   end
 
   if #pal>0 then
-    local header = zone.name.."\n"
-    for i=1,#pal do
-      header = header..pal[i].." "
-    end
-    return header.."\n"..body
+    return zone.name.."\n"..table.concat(pal," ").."\n"..body
   end
 end
 
