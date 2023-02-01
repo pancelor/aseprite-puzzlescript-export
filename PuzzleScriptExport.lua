@@ -185,10 +185,12 @@ local function gatherZones(sprite,gridtype)
     zoneh=sprite.gridBounds.height
     -- selection correction
     -- pq(rect)
-    local x1=math.ceil(rect.x/zonew)*zonew
-    local y1=math.ceil(rect.y/zoneh)*zoneh
-    local x2p=math.floor((rect.x+rect.width-1)/zonew)*zonew -- 1 past x2
-    local y2p=math.floor((rect.y+rect.height-1)/zoneh)*zoneh
+    local x1=math.floor(rect.x/zonew)*zonew
+    local y1=math.floor(rect.y/zoneh)*zoneh
+    -- pq(x1,y1)
+    local x2p=math.ceil((rect.x+rect.width-1)/zonew)*zonew -- 1 past x2
+    local y2p=math.ceil((rect.y+rect.height-1)/zoneh)*zoneh
+    -- pq(x2p,y2p)
     rect = Rectangle(x1,y1,x2p-x1,y2p-y1)
     -- pq(rect)
   elseif gridtype=="slices" then
@@ -344,3 +346,16 @@ dlg:button{text="Export", onclick=function()
   app.alert((#tiles).." tiles exported")
 end}
 dlg:show{wait=false}
+
+
+
+-- todo: remove file select? replace with clipboard:
+-- -- copy string to host clipboard
+-- -- https://community.aseprite.org/t/solved-copy-string-within-aseprite-extension/16344
+-- local function xsel(str)
+--   -- io.popen('clip','w'):write(str):close() -- windows-only
+--   print(str)
+-- end
+-- dlg:label{
+--   text="(then ctrl-c)",
+-- }
