@@ -187,11 +187,10 @@ local function gatherZones(sprite,gridtype)
     -- pq(rect)
     local x1=math.floor(rect.x/zonew)*zonew
     local y1=math.floor(rect.y/zoneh)*zoneh
-    -- pq(x1,y1)
-    local x2p=math.ceil((rect.x+rect.width-1)/zonew)*zonew -- 1 past x2
-    local y2p=math.ceil((rect.y+rect.height-1)/zoneh)*zoneh
-    -- pq(x2p,y2p)
-    rect = Rectangle(x1,y1,x2p-x1,y2p-y1)
+    local x2=math.ceil((rect.x+rect.width-1)/zonew)*zonew
+    local y2=math.ceil((rect.y+rect.height-1)/zoneh)*zoneh
+    -- pq(x1,y1,x2,y2)
+    rect = Rectangle(x1,y1,x2-x1,y2-y1)
     -- pq(rect)
   elseif gridtype=="slices" then
     for i,slice in ipairs(sprite.slices) do
