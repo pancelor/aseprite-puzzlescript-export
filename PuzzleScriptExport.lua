@@ -308,23 +308,6 @@ end
 ]]
 
 local dlg = Dialog("PuzzleScript Export")
-
-local output_cache=""
-local function set_output( label,text)
-  if not label then
-    text=output_cache
-  else
-    output_cache=text
-  end
-  dlg:modify{
-    id="output",
-    label=label,
-    text=text,
-    focus=true,
-    visible=true,
-  }
-end
-
 dlg:combobox{
   id="gridtype",
   label="grid type",
@@ -346,7 +329,13 @@ dlg:button{text="Export", onclick=function()
 
   local label = string.format("output (%d)",#tiles)
   local text = table.concat(tiles,"\n")
-  set_output(label,text)
+  dlg:modify{
+    id="output",
+    label=label,
+    text=text,
+    focus=true,
+    visible=true,
+  }
 end}
 dlg:entry{
   id="output",
@@ -354,8 +343,5 @@ dlg:entry{
   text="",
   focus=false,
   visible=false,
-  onchange=function()
-    set_output()
-  end,
 }
 dlg:show{wait=false}
