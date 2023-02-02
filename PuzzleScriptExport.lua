@@ -97,6 +97,60 @@ local function getId()
   return _id
 end
 
+local function defaultGridType()
+    -- todo: would be great to check something like
+    -- "if app.activeSprite.gridVisible then"
+    -- but I don't see anything like that in the API
+  local gb = app.activeSprite.gridBounds
+  local gridVisible = gb.width~=16 or gb.height~=16
+
+  if #app.activeSprite.slices>0 then
+    return "slices"
+  elseif gridVisible then
+    return "aseprite grid"
+  else
+    return "5x5"
+  end
+end
+
+local function tilemapToImage(imgSrc, tileset, colorMode)
+  assert(imgSrc.colorMode==ColorMode.TILEMAP,"can only call on tilemap")
+
+  local size = tileset.grid.tileSize
+
+  local imgDstSpec = ImageSpec(imgSrc.spec)
+  imgDstSpec.colorMode = colorMode
+  imgDstSpec.width  = imgSrc.width *size.width
+  imgDstSpec.height = imgSrc.height*size.height
+
+  local imgDst = Image(imgDstSpec)
+  for it in imgSrc:pixels() do
+    local tileimg = tileset:getTile(it())
+    imgDst:drawImage(tileimg,it.x*size.width,it.y*size.height)
+  end
+  return imgDst
+end
+
+local function weirdImagetoRgbImage(imgSrc)
+  assert(imgSrc.colorMode==ColorMode.INDEXED or imgSrc.colorMode==ColorMode.GRAYSCALE,"can only call on indexed or grayscale images")
+
+  local imgDstSpec = ImageSpec(imgSrc.spec)
+  imgDstSpec.colorMode = ColorMode.RGB
+
+  -- local posSrc = imgSrc.cel.position --todo?
+  local posSrc = Point(0,0)
+
+  local imgDst = Image(imgDstSpec)
+  for it in imgSrc:pixels() do
+    if it()~=imgSrc.spec.transparentColor then
+      local col = Color(it())
+      -- pq("pixel",it(),col.red,col.blue,col.green,col.alpha)
+      imgDst:drawPixel(posSrc.x+it.x,posSrc.y+it.y,col)
+    end
+  end
+  return imgDst
+end
+
 -- converts a single "zone" into a string
 local function exportZone(img,zone)
   assert(img.colorMode==ColorMode.RGB)
@@ -152,60 +206,6 @@ local function exportZone(img,zone)
   if #pal>0 then
     return zone.name.."\n"..table.concat(pal," ").."\n"..body
   end
-end
-
-local function defaultGridType()
-    -- todo: would be great to check something like
-    -- "if app.activeSprite.gridVisible then"
-    -- but I don't see anything like that in the API
-  local gb = app.activeSprite.gridBounds
-  local gridVisible = gb.width~=16 or gb.height~=16
-
-  if #app.activeSprite.slices>0 then
-    return "slices"
-  elseif gridVisible then
-    return "aseprite grid"
-  else
-    return "5x5"
-  end
-end
-
-local function tilemapToImage(imgSrc, tileset, colorMode)
-  assert(imgSrc.colorMode==ColorMode.TILEMAP,"can only call on tilemap")
-
-  local size = tileset.grid.tileSize
-
-  local imgDstSpec = ImageSpec(imgSrc.spec)
-  imgDstSpec.colorMode = colorMode
-  imgDstSpec.width  = imgSrc.width *size.width
-  imgDstSpec.height = imgSrc.height*size.height
-
-  local imgDst = Image(imgDstSpec)
-  for it in imgSrc:pixels() do
-    local tileimg = tileset:getTile(it())
-    imgDst:drawImage(tileimg,it.x*size.width,it.y*size.height)
-  end
-  return imgDst
-end
-
-local function weirdImagetoRgbImage(imgSrc)
-  assert(imgSrc.colorMode==ColorMode.INDEXED or imgSrc.colorMode==ColorMode.GRAYSCALE,"can only call on indexed or grayscale images")
-
-  local imgDstSpec = ImageSpec(imgSrc.spec)
-  imgDstSpec.colorMode = ColorMode.RGB
-
-  -- local posSrc = imgSrc.cel.position --todo?
-  local posSrc = Point(0,0)
-
-  local imgDst = Image(imgDstSpec)
-  for it in imgSrc:pixels() do
-    if it()~=imgSrc.spec.transparentColor then
-      local col = Color(it())
-      -- pq("pixel",it(),col.red,col.blue,col.green,col.alpha)
-      imgDst:drawPixel(posSrc.x+it.x,posSrc.y+it.y,col)
-    end
-  end
-  return imgDst
 end
 
 --[[
@@ -275,7 +275,7 @@ end
 -- create an rgb image from the current sprite
 -- properly handles tilemaps
 -- properly handles indexed/grayscale images
-local function prepareImage(layeronly)
+local function spriteToRgbImage(layeronly)
   local res
   if app.activeImage.colorMode==ColorMode.TILEMAP and layeronly then
     local ti,tileset = find(app.activeSprite.tilesets,app.activeLayer.tileset)
@@ -345,7 +345,7 @@ dlg:button{text = "Export", onclick = function()
   if not app.activeSprite then return app.alert("error: no sprite found") end
 
   local zones = gatherZones(gridtype)
-  local imgRGB = prepareImage(layeronly)
+  local imgRGB = spriteToRgbImage(layeronly)
   local tiles = exportZones(imgRGB,zones)
 
   -- set output
