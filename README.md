@@ -55,19 +55,17 @@ Save [PuzzleScriptExport.lua](https://raw.githubusercontent.com/pancelor/aseprit
 * Open the exporter from the Aseprite menu: File > Scripts > PuzzleScriptExport
 * Choose your export settings (see below)
 * Press the "Export" button
-* Open the export file and copy the exported text into your PuzzleScript game
+* Copy the output text; paste it into your PuzzleScript game
 * Leave the export window open to quickly export again later
 
 If you select a rectangle in your image and then press the "Export" button, only the tiles inside that rectangle will be exported.
 
 ### Export Settings
 
-* `File`: choose which file the sprites will be exported to.
-  * This file will be **completely overwritten** every time you export!
 * `grid type`:
   * `5x5`: the exporter will export 5x5 tiles.
   * `aseprite grid`: the exporter will export tiles from the aseprite grid. (View > Grid > Grid Settings)
-  * `slices`: the exporter will export the sprite's [slices](https://www.aseprite.org/docs/slices/) - this lets you name your sprites in Aseprite, instead of needing to rename them after exporting.
+  * `slices`: the exporter will export the sprite's [slices](https://www.aseprite.org/docs/slices/) -- this lets you name your sprites in Aseprite, instead of needing to rename them after exporting. Recommended for long-term projects.
 * `active layer only`: whether to export visible pixels (default) or just the pixels from the current layer.
 
 (why would you want non-5x5 sprites? there are [PuzzleScript](https://auroriax.github.io/PuzzleScript/editor.html) [forks](https://github.com/broken-sign-games/PuzzleScript) out there that allow differently-sized sprites)
@@ -86,7 +84,7 @@ This script will consider any color with alpha value 0 as transparent. Make sure
 
 ### Feature Wishlist
 
-Will these be implemented? We'll see! If you decide to implement these yourself, feel free to open a pull request!
+I might get around to these, or maybe not. (Feel free to open a pull request)
 
 - [x] add support for [slices](https://www.aseprite.org/docs/slices/)
 - [x] add support for indexed/palettized images

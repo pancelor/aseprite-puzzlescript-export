@@ -137,15 +137,12 @@ local function weirdImagetoRgbImage(imgSrc)
   local imgDstSpec = ImageSpec(imgSrc.spec)
   imgDstSpec.colorMode = ColorMode.RGB
 
-  -- local posSrc = imgSrc.cel.position --todo?
-  local posSrc = Point(0,0)
-
   local imgDst = Image(imgDstSpec)
   for it in imgSrc:pixels() do
     if it()~=imgSrc.spec.transparentColor then
       local col = Color(it())
       -- pq("pixel",it(),col.red,col.blue,col.green,col.alpha)
-      imgDst:drawPixel(posSrc.x+it.x,posSrc.y+it.y,col)
+      imgDst:drawPixel(it.x,it.y,col)
     end
   end
   return imgDst
@@ -164,8 +161,7 @@ local function exportZone(img,zone)
       local inbounds = mid(0,img.width-1,x)==x and mid(0,img.height-1,y)==y
       local col32 = inbounds and img:getPixel(x,y) or 0
 
-      local hexcode,transparent
-      do
+      local hexcode,trans do
         -- note: col32 is a 32-bit int, even if app.activeSprite.colorMode is indexed
         -- so Color(col32) does not work -- it will misinterpret indexed images
         -- https://www.aseprite.org/api/color#color
@@ -174,23 +170,20 @@ local function exportZone(img,zone)
         local bb = app.pixelColor.rgbaB(col32)
         local aa = app.pixelColor.rgbaA(col32)
         hexcode = string.format("#%02x%02x%02x", rr, gg, bb)
-        transparent = aa==0
+        trans = aa==0
         -- pq(string.format("#%08x @ %d,%d",col32,x,y),"|",rr,gg,bb,aa)
       end
 
       local code
-      if transparent then
+      if trans then
         code = "."
       else
-        local existing = find(pal,hexcode)
-        if existing then
-          -- old color
-          code = existing-1
-        else
-          -- new color found
+        local index = find(pal,hexcode)
+        if not index then
           add(pal,hexcode)
-          code = #pal-1
+          index = #pal
         end
+        code = index-1
       end
 
       body = body..code
@@ -334,7 +327,7 @@ dlg:combobox{
 dlg:check{
   id       = "layeronly",
   label    = "active layer only",
-  selected = false,
+  selected = true,
 }
 dlg:button{text = "Export", onclick = function()
   -- clear output, in case we're interrupted by errors
