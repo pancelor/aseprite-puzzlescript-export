@@ -93,4 +93,5 @@ Will these be implemented? We'll see! If you decide to implement these yourself,
 - [x] add ability to export the current layer only
 - [x] add support for [tilemap](https://www.aseprite.org/docs/tilemap) layers
 - [ ] deduplicate exported tiles
+  - [ ] but only in auto-name mode -- identical slices should stay separate
 - [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation (not just sprite drawing)

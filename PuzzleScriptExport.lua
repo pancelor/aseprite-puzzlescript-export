@@ -112,11 +112,16 @@ local function exportZone(img,zone)
 
       local hexcode,transparent
       do
+        -- note: pix is a 32-bit int, even if app.activeSprite.colorMode is indexed
+        -- so Color(pix) does not work -- it will misinterpret indexed images
         local pix = img:getPixel(x+tx, y+ty)
-        local color = Color(pix)
-        hexcode = string.format("#%02x%02x%02x", color.red, color.green, color.blue)
-        transparent = color.alpha==0 or pix==0
-        -- pqt(pix,"|",color.red,color.green,color.blue,color.alpha)
+        local rr = app.pixelColor.rgbaR(pix)
+        local gg = app.pixelColor.rgbaG(pix)
+        local bb = app.pixelColor.rgbaB(pix)
+        local aa = app.pixelColor.rgbaA(pix)
+        hexcode = string.format("#%02x%02x%02x", rr, gg, bb)
+        transparent = aa==0
+        -- pq(string.format("#%08x",pix),"|",rr,gg,bb,aa)
       end
 
       local code
