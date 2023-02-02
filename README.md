@@ -95,3 +95,5 @@ Will these be implemented? We'll see! If you decide to implement these yourself,
 - [ ] deduplicate exported tiles
   - [ ] but only in auto-name mode -- identical slices should stay separate
 - [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation (not just sprite drawing)
+- [ ] regression tests. `{all layers,active layer only}x{3 grid types}x{indexed colormode,rgba}x{tilemap,not}`
+  - [ ] commandline conversion support

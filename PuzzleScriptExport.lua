@@ -23,7 +23,7 @@ the docs don't exist yet, but see https://github.com/aseprite/api/issues/66
 ]]
 
 local qindent=0
-function qq(...)
+local function qq(...)
   local tbl={...}
   local s=""
   for i=1,#tbl do
@@ -44,44 +44,31 @@ function qq(...)
   end
   return s
 end
-function pq(...)
+local function pq(...)
   print(qq(...))
 end
-function qa(l)
+local function qa(l)
   return "{"..table.concat(l,",").."}"
 end
 
 -- returns any key in tab s.t tab[key]==x
-function find(tab,x)
+local function find(tab,x)
   for k,v in pairs(tab) do
     if v==x then return k end
   end
 end
-function ifind(tab,x)
+local function ifind(tab,x)
   for i=1,#tab do
     if tab[i]==x then return i end
   end
 end
 
-function add(tab,elem)
+local function add(tab,elem)
   table.insert(tab,elem)
   return elem
 end
-function deli(tab,ix)
+local function deli(tab,ix)
   return table.remove(tab,ix)
-end
-
-function mid(a,b,c)
-  c=c or 0
-  b=b or 1
-  local ab,bc,ac=a<b,b<c,a<c
-  if ab==bc then
-    return b
-  elseif bc==ac then
-    return a
-  else
-    return c
-  end
 end
 
 --[[
@@ -99,53 +86,49 @@ end
 -- convert a single "zone" into a string
 local function exportZone(img,zone)
   -- pq("exportZone",zone)
-  local x=zone.bounds.x
-  local y=zone.bounds.y
-  local w=zone.bounds.width
-  local h=zone.bounds.height
 
   local pal={} -- array of colors
   local body=""
-  for ty=0,h-1 do
-    for tx=0,w-1 do
-      -- pqt = ty==0 and tx==0 and pq or function()end
+  for it in img:pixels(zone.bounds) do
+    -- pqt = it.x==0 and it.y==0 and pq or function()end
 
-      local hexcode,transparent
-      do
-        -- note: pix is a 32-bit int, even if app.activeSprite.colorMode is indexed
-        -- so Color(pix) does not work -- it will misinterpret indexed images
-        local pix = img:getPixel(x+tx, y+ty)
-        local rr = app.pixelColor.rgbaR(pix)
-        local gg = app.pixelColor.rgbaG(pix)
-        local bb = app.pixelColor.rgbaB(pix)
-        local aa = app.pixelColor.rgbaA(pix)
-        hexcode = string.format("#%02x%02x%02x", rr, gg, bb)
-        transparent = aa==0
-        -- pq(string.format("#%08x",pix),"|",rr,gg,bb,aa)
-      end
-
-      local code
-      if transparent then
-        code = "."
-      else
-        local existing = find(pal,hexcode)
-        if existing then
-          -- old color
-          code = existing-1
-        else
-          -- new color found
-          code = #pal
-          add(pal,hexcode)
-        end
-      end
-
-      body = body..code
+    local hexcode,transparent
+    do
+      -- note: pix is a 32-bit int, even if app.activeSprite.colorMode is indexed
+      -- so Color(pix) does not work -- it will misinterpret indexed images
+      -- https://www.aseprite.org/api/color#color
+      local rr = app.pixelColor.rgbaR(it())
+      local gg = app.pixelColor.rgbaG(it())
+      local bb = app.pixelColor.rgbaB(it())
+      local aa = app.pixelColor.rgbaA(it())
+      hexcode = string.format("#%02x%02x%02x", rr, gg, bb)
+      transparent = aa==0
+      -- pq(string.format("#%08x",pix),"|",rr,gg,bb,aa)
     end
-    body = body.."\n"
+
+    local code
+    if transparent then
+      code = "."
+    else
+      local existing = find(pal,hexcode)
+      if existing then
+        -- old color
+        code = existing-1
+      else
+        -- new color found
+        add(pal,hexcode)
+        code = #pal-1
+      end
+    end
+
+    body = body..code
+    if it.x == zone.bounds.width-1 then
+      body = body.."\n"
+    end
   end
 
   if #pal>10 then
-    print("error: too many colors in sprite at x="..x.." y="..y)
+    print("error: more than 10 colors in sprite at x="..x.." y="..y)
   end
 
   if #pal>0 then
@@ -154,9 +137,15 @@ local function exportZone(img,zone)
 end
 
 local function defaultGridType()
+    -- todo: would be great to check something like
+    -- "if app.activeSprite.gridVisible then"
+    -- but I don't see anything like that in the API
+  local gb = app.activeSprite.gridBounds
+  local gridVisible = gb.width~=16 or gb.height~=16
+
   if #app.activeSprite.slices>0 then
     return "slices"
-  elseif app.activeSprite.gridBounds.width~=16 then
+  elseif gridVisible then
     return "aseprite grid"
   else
     return "5x5"
@@ -318,14 +307,24 @@ end
 # main
 ]]
 
-local dlg = Dialog("PuzzleScript Sprite Export")
-dlg:file{
-  id="exportFile",
-  label="File",
-  title="PuzzleScript Export",
-  save=true,
-  filetypes={"txt"},
-}
+local dlg = Dialog("PuzzleScript Export")
+
+local output_cache=""
+local function set_output( label,text)
+  if not label then
+    text=output_cache
+  else
+    output_cache=text
+  end
+  dlg:modify{
+    id="output",
+    label=label,
+    text=text,
+    focus=true,
+    visible=true,
+  }
+end
+
 dlg:combobox{
   id="gridtype",
   label="grid type",
@@ -337,29 +336,26 @@ dlg:check{
   label="active layer only",
 }
 dlg:button{text="Export", onclick=function()
-  local filename,gridtype,layeronly = dlg.data.exportFile,dlg.data.gridtype,dlg.data.layeronly
+  local gridtype,layeronly = dlg.data.gridtype,dlg.data.layeronly
 
   if not app.activeSprite then return app.alert("error: no sprite found") end
 
   local zones = gatherZones(app.activeSprite,gridtype)
   local img = prepareImage(app.activeSprite,layeronly)
   local tiles = exportZones(img,zones)
-  if #filename==0 then return app.alert("error: no file chosen") end
-  writeZones(tiles,filename)
 
-  app.alert((#tiles).." tiles exported")
+  local label = string.format("output (%d)",#tiles)
+  local text = table.concat(tiles,"\n")
+  set_output(label,text)
 end}
+dlg:entry{
+  id="output",
+  label="output",
+  text="",
+  focus=false,
+  visible=false,
+  onchange=function()
+    set_output()
+  end,
+}
 dlg:show{wait=false}
-
-
-
--- todo: remove file select? replace with clipboard:
--- -- copy string to host clipboard
--- -- https://community.aseprite.org/t/solved-copy-string-within-aseprite-extension/16344
--- local function xsel(str)
---   -- io.popen('clip','w'):write(str):close() -- windows-only
---   print(str)
--- end
--- dlg:label{
---   text="(then ctrl-c)",
--- }
