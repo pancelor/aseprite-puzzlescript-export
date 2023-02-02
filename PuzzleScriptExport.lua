@@ -1,5 +1,6 @@
 -- PuzzleScript Export
 --  by pancelor, 2022-02-01
+--  pancelor.com
 
 -- handy link to the aseprite api docs:
 -- https://www.aseprite.org/api/
@@ -50,15 +51,16 @@ local function qa(l)
   return "{"..table.concat(l,",").."}"
 end
 
--- returns any key in tab s.t tab[key]==x
-local function find(tab,x)
-  for k,v in pairs(tab) do
-    if v==x then return k end
+-- returns the first index in arr where arr[index]==target
+function find(arr,target)
+  for k,v in ipairs(arr) do
+    if v==target then return k,v end
   end
 end
-local function ifind(tab,x)
-  for i = 1,#tab do
-    if tab[i]==x then return i end
+-- returns any key in arr s.t fn(value) is truthy
+function findby(arr,fn)
+  for k,v in ipairs(arr) do
+    if fn(v) then return k,v end
   end
 end
 
@@ -68,6 +70,19 @@ local function add(tab,elem)
 end
 local function deli(tab, ix)
   return table.remove(tab,ix)
+end
+
+local function mid(a,b,c)
+  c=c or 0
+  b=b or 1
+  local ab,bc,ac=a<b,b<c,a<c
+  if ab==bc then
+    return b
+  elseif bc==ac then
+    return a
+  else
+    return c
+  end
 end
 
 --[[
@@ -89,46 +104,49 @@ local function exportZone(img,zone)
 
   local pal = {} -- array of colors
   local body = ""
-  for it in img:pixels(zone.bounds) do
-    -- pqt = it.x==0 and it.y==0 and pq or function()end
+  for y = zone.bounds.y,zone.bounds.y+zone.bounds.height-1 do
+    for x = zone.bounds.x,zone.bounds.x+zone.bounds.width-1 do
+      -- pqt = x==0 and y==0 and pq or function()end
+      local inbounds = mid(0,img.width-1,x)==x and mid(0,img.height-1,y)==y
+      local col32 = inbounds and img:getPixel(x,y) or 0
 
-    local hexcode,transparent
-    do
-      -- note: pix is a 32-bit int, even if app.activeSprite.colorMode is indexed
-      -- so Color(pix) does not work -- it will misinterpret indexed images
-      -- https://www.aseprite.org/api/color#color
-      local rr = app.pixelColor.rgbaR(it())
-      local gg = app.pixelColor.rgbaG(it())
-      local bb = app.pixelColor.rgbaB(it())
-      local aa = app.pixelColor.rgbaA(it())
-      hexcode = string.format("#%02x%02x%02x", rr, gg, bb)
-      transparent = aa==0
-      -- pq(string.format("#%08x",pix),"|",rr,gg,bb,aa)
-    end
-
-    local code
-    if transparent then
-      code = "."
-    else
-      local existing = find(pal,hexcode)
-      if existing then
-        -- old color
-        code = existing-1
-      else
-        -- new color found
-        add(pal,hexcode)
-        code = #pal-1
+      local hexcode,transparent
+      do
+        -- note: col32 is a 32-bit int, even if app.activeSprite.colorMode is indexed
+        -- so Color(col32) does not work -- it will misinterpret indexed images
+        -- https://www.aseprite.org/api/color#color
+        local rr = app.pixelColor.rgbaR(col32)
+        local gg = app.pixelColor.rgbaG(col32)
+        local bb = app.pixelColor.rgbaB(col32)
+        local aa = app.pixelColor.rgbaA(col32)
+        hexcode = string.format("#%02x%02x%02x", rr, gg, bb)
+        transparent = aa==0
+        -- pq(string.format("#%08x @ %d,%d",col32,x,y),"|",rr,gg,bb,aa)
       end
-    end
 
-    body = body..code
-    if it.x==zone.bounds.width-1 then
-      body = body.."\n"
+      local code
+      if transparent then
+        code = "."
+      else
+        local existing = find(pal,hexcode)
+        if existing then
+          -- old color
+          code = existing-1
+        else
+          -- new color found
+          add(pal,hexcode)
+          code = #pal-1
+        end
+      end
+
+      body = body..code
     end
+    body = body.."\n"
   end
 
   if #pal>10 then
-    print("error: more than 10 colors in sprite at ("..x..","..y..")")
+    print("error: more than 10 colors in sprite at ("..zone.bounds.x..","..zone.bounds.y..")")
+    return ""
   end
 
   if #pal>0 then
@@ -152,50 +170,55 @@ local function defaultGridType()
   end
 end
 
--- https://github.com/dacap/export-aseprite-file/blob/master/export.lua#L125-L132
-local function get_tileset_for_layer(layer)
-  for i,tileset in ipairs(layer.sprite.tilesets) do
-    if layer.tileset==tileset then
-      return tileset
-    end
+local function tilemapToImage(imgSrc, tileset, colorMode)
+  assert(imgSrc.colorMode==ColorMode.TILEMAP,"can only call on tilemap")
+
+  local size = tileset.grid.tileSize
+
+  local imgDstSpec = ImageSpec(imgSrc.spec)
+  imgDstSpec.colorMode = colorMode
+  imgDstSpec.width  = imgSrc.width *size.width
+  imgDstSpec.height = imgSrc.height*size.height
+
+  local imgDst = Image(imgDstSpec)
+  for it in imgSrc:pixels() do
+    local tileimg = tileset:getTile(it())
+    imgDst:drawImage(tileimg,it.x*size.width,it.y*size.height)
   end
+  return imgDst
 end
 
--- there's gotta be a better way to convert a tilemap cel into pixels, right?
--- returns: an Image
-local function renderTilemapCel(cel)
-  local tilemap = cel.image
-  assert(tilemap.colorMode==ColorMode.TILEMAP)
-  assert(cel.sprite.tilesets)
-  assert(#cel.sprite.tilesets>0,"error: no tilesets found on a tilemap layer")
+local function weirdImagetoRgbImage(imgSrc)
+  assert(imgSrc.colorMode==ColorMode.INDEXED or imgSrc.colorMode==ColorMode.GRAYSCALE,"can only call on indexed or grayscale images")
 
-  -- uhhh apparently this is 2 for me? very strange
-  -- pq(#cel.sprite.tilesets)
-  -- pq(cel.sprite.tilesets)
-  -- assert(#cel.sprite.tilesets==1,"error: multiple tilesets is not supported")
+  local imgDstSpec = ImageSpec(imgSrc.spec)
+  imgDstSpec.colorMode = ColorMode.RGB
 
-  local tileset = get_tileset_for_layer(cel.layer)
-  assert(tileset)
-  local size = tileset.grid.tileSize
-  local img = Image(tilemap.width*size.width,tilemap.height*size.height)
-  for it in tilemap:pixels() do
-    local tileix = app.pixelColor.tileI(it())
-    local tileimg = tileset:getTile(tileix)
-    img:drawImage(tileimg,it.x*size.width,it.y*size.height)
+  -- local posSrc = imgSrc.cel.position --todo?
+  local posSrc = Point(0,0)
+
+  local imgDst = Image(imgDstSpec)
+  for it in imgSrc:pixels() do
+    if it()~=imgSrc.spec.transparentColor then
+      local col = Color(it())
+      -- pq("pixel",it(),col.red,col.blue,col.green,col.alpha)
+      imgDst:drawPixel(posSrc.x+it.x,posSrc.y+it.y,col)
+    end
   end
-  return img
+  return imgDst
 end
 
 --[[
 # script
 ]]
 
--- returns a list of "zones" that fit into the current selection of sprite
+-- returns a list of "zones" that fit into the current selection of the active sprite
 --   a "zone" is a {name = <string>, bounds = <Rectangle>} object
 -- sel may be non-rectangular (e.g. multiple rectangles)
 --   but support isn't great (e.g. the grid anchor will not reset between
 --   multiple selections)
-local function gatherZones(sprite,gridtype)
+local function gatherZones(gridtype)
+  local sprite = app.activeSprite
   local zones = {}
 
   local sel = sprite.selection
@@ -224,7 +247,7 @@ local function gatherZones(sprite,gridtype)
     for i,slice in ipairs(sprite.slices) do
       if rect:contains(slice.bounds) then
         add(zones,{
-          name = slice.name,
+          name = slice.name:gsub(" ","_"),
           bounds = slice.bounds,
         })
       end
@@ -249,26 +272,32 @@ local function gatherZones(sprite,gridtype)
   return zones
 end
 
--- create an image that we can extract colors from
--- note: the image will have colorMode RGB, even if
--- app.activeSprite is TILEMAP or INDEXED
-local function prepareImage(sprite,layeronly)
-  local img = Image(sprite.width,sprite.height) --iirc we want this instead of sprite.spec to drop ColorMode info and become RGB
-  if layeronly then
-    if not app.activeCel then
-      app.alert("error: current layer is empty")
-      return
-    end
-    if app.activeCel.image.colorMode==ColorMode.TILEMAP then
-      img:drawImage(renderTilemapCel(app.activeCel))
-    else
-      img:drawImage(app.activeCel.image, app.activeCel.position)
-    end
+-- create an rgb image from the current sprite
+-- properly handles tilemaps
+-- properly handles indexed/grayscale images
+local function prepareImage(layeronly)
+  local res
+  if app.activeImage.colorMode==ColorMode.TILEMAP and layeronly then
+    local ti,tileset = find(app.activeSprite.tilesets,app.activeLayer.tileset)
+    assert(tileset)
+
+    res = tilemapToImage(app.activeImage,tileset,app.activeSprite.colorMode)
   else
-    img:drawSprite(sprite, app.activeFrame)
+    res = Image(app.activeSprite.spec)
+    if layeronly then
+      res:drawImage(app.activeCel.image,app.activeCel.position)
+    else
+      res:drawSprite(app.activeSprite,app.activeFrame)
+      assert(res.colorMode~=ColorMode.TILEMAP)
+    end
   end
 
-  return img
+  if res.colorMode==ColorMode.INDEXED or res.colorMode==ColorMode.GRAY then
+    res = weirdImagetoRgbImage(res)
+  end
+
+  assert(res.colorMode==ColorMode.RGB)
+  return res
 end
 
 -- returns a list of strings
@@ -291,60 +320,50 @@ local function exportZones(img,zones)
   return result
 end
 
--- writes a list of strings to the given file
-local function writeZones(tiles,filename)
-  if #filename==0 then return end
-
-  local f = io.open(filename, "w")
-  io.output(f)
-
-  for i = 1,#tiles do
-    io.write(tiles[i])
-    io.write("\n")
-  end
-
-  io.close(f)
-end
-
 --[[
 # main
 ]]
 
 local dlg = Dialog("PuzzleScript Export")
 dlg:combobox{
-  id = "gridtype",
-  label = "grid type",
-  option = defaultGridType(),
-  options = { "5x5","aseprite grid","slices" },
+  id      = "gridtype",
+  label   = "grid type",
+  option  = defaultGridType(),
+  options = {"5x5", "aseprite grid", "slices"},
 }
 dlg:check{
-  id = "layeronly",
-  label = "active layer only",
+  id       = "layeronly",
+  label    = "active layer only",
+  selected = false,
 }
 dlg:button{text = "Export", onclick = function()
+  -- clear output, in case we're interrupted by errors
+  dlg:modify{id = "output", label = "", text = ""}
+
   local gridtype,layeronly = dlg.data.gridtype,dlg.data.layeronly
 
   if not app.activeSprite then return app.alert("error: no sprite found") end
 
-  local zones = gatherZones(app.activeSprite,gridtype)
-  local img = prepareImage(app.activeSprite,layeronly)
-  local tiles = exportZones(img,zones)
+  local zones = gatherZones(gridtype)
+  local imgRGB = prepareImage(layeronly)
+  local tiles = exportZones(imgRGB,zones)
 
+  -- set output
   local label = string.format("output (%d)",#tiles)
   local text = table.concat(tiles,"\n")
   dlg:modify{
-    id = "output",
-    label = label,
-    text = text,
-    focus = true,
+    id      = "output",
+    label   = label,
+    text    = text,
+    focus   = true,
     visible = true,
   }
 end}
 dlg:entry{
-  id = "output",
-  label = "output",
-  text = "",
-  focus = false,
+  id      = "output",
+  label   = "output",
+  text    = "",
+  focus   = false,
   visible = false,
 }
 dlg:show{wait = false}
