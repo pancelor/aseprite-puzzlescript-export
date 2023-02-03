@@ -52,13 +52,13 @@ local function qa(l)
 end
 
 -- returns the first index in arr where arr[index]==target
-function find(arr,target)
+local function find(arr,target)
   for k,v in ipairs(arr) do
     if v==target then return k,v end
   end
 end
 -- returns any key in arr s.t fn(value) is truthy
-function findby(arr,fn)
+local function findby(arr,fn)
   for k,v in ipairs(arr) do
     if fn(v) then return k,v end
   end
