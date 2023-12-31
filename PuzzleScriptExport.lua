@@ -13,7 +13,9 @@ you import those back into aseprite? it's doable, but it sounds awkward
 
 is it useful enough to add anyway? eh, maybe
 
-the docs don't exist yet, but see https://github.com/aseprite/api/issues/66
+the tilemap docs don't exist yet, but see this example:
+https://github.com/dacap/export-aseprite-file/
+(via https://github.com/aseprite/api/issues/66)
 ]]
 
 
@@ -205,12 +207,23 @@ end
 # script
 ]]
 
+-- choose a prefix for 5x5 the non-slice export modes
+function choosePrefix(filename)
+  if not filename then
+    return "aseprite"
+  end
+
+  local prefix = app.fs.fileTitle(filename)
+  return prefix
+end
+
 -- returns a list of "zones" that fit into the current selection of the active sprite
 --   a "zone" is a {name = <string>, bounds = <Rectangle>} object
 -- sel may be non-rectangular (e.g. multiple rectangles)
 --   but support isn't great (e.g. the grid anchor will not reset between
 --   multiple selections)
-local function gatherZones(gridtype)
+local function gatherZones(gridtype, prefix)
+  prefix = prefix or "sprite"
   local sprite = app.activeSprite
   local zones = {}
 
@@ -250,7 +263,7 @@ local function gatherZones(gridtype)
 
   for y = rect.y,rect.y+rect.height-1,zoneh do
     for x = rect.x,rect.x+rect.width-1,zonew do
-      local name = "aseprite"..getId()
+      local name = prefix..getId()
       add(zones,{
         name = name,
         bounds = Rectangle{
@@ -320,29 +333,39 @@ end
 local dlg = Dialog("PuzzleScript Export")
 dlg:combobox{
   id      = "gridtype",
-  label   = "grid type",
+  label   = "Grid type",
   option  = defaultGridType(),
   options = {"5x5", "aseprite grid", "slices"},
 }
+-- dlg:check{
+--   id = 'foo',
+--   label ='test',
+--   onclick=function()
+--     dlg:modify{
+--       id = "gridtype",
+--       enabled= not dlg.data.foo,
+--     }
+--   end,
+-- }
 dlg:check{
   id       = "layeronly",
-  label    = "active layer only",
+  label    = "Active layer only",
   selected = true,
 }
-dlg:button{text = "Export", onclick = function()
+dlg:button{text = "&Export", onclick = function()
   -- clear output, in case we're interrupted by errors
   dlg:modify{id = "output", label = "", text = ""}
 
-  local gridtype,layeronly = dlg.data.gridtype,dlg.data.layeronly
-
   if not app.activeSprite then return app.alert("error: no sprite found") end
 
-  local zones = gatherZones(gridtype)
+  local gridtype,layeronly = dlg.data.gridtype,dlg.data.layeronly
+  local prefix = choosePrefix(app.activeSprite.filename)
+  local zones = gatherZones(gridtype,prefix)
   local imgRGB = spriteToRgbImage(layeronly)
   local tiles = exportZones(imgRGB,zones)
 
   -- set output
-  local label = string.format("output (%d)",#tiles)
+  local label = string.format("Output (%d)",#tiles)
   local text = table.concat(tiles,"\n")
   dlg:modify{
     id      = "output",
@@ -354,7 +377,7 @@ dlg:button{text = "Export", onclick = function()
 end}
 dlg:entry{
   id      = "output",
-  label   = "output",
+  label   = "Output",
   text    = "",
   focus   = false,
   visible = false,
