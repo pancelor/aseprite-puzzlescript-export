@@ -93,26 +93,18 @@ end
 
 -- note: this counter doesn't reset between exports
 -- (good, I think?)
-local _id = 0
+local _id = -1
 local function getId()
   _id = _id+1
   return _id
 end
 
-local function defaultGridType()
-    -- todo: would be great to check something like
-    -- "if app.activeSprite.gridVisible then"
-    -- but I don't see anything like that in the API
-  local gb = app.activeSprite.gridBounds
-  local gridVisible = gb.width~=16 or gb.height~=16
-
-  if #app.activeSprite.slices>0 then
-    return "slices"
-  elseif gridVisible then
-    return "aseprite grid"
-  else
-    return "5x5"
-  end
+-- convert a name into a valid puzzlescript spritename
+-- note: not very robust
+-- mainly just intended to easy-fix filenames
+local function sanitizeName(name)
+  return name:gsub("[ -.]","_")
+  -- return name:gsub("[%p%s]","_")
 end
 
 local function tilemapToImage(imgSrc, tileset, colorMode)
@@ -207,14 +199,22 @@ end
 # script
 ]]
 
--- choose a prefix for 5x5 the non-slice export modes
-function choosePrefix(filename)
-  if not filename then
-    return "aseprite"
+-- see gatherZones
+local function _gatherZonesFromGrid(data)
+  for y = data.rect.y,data.rect.y+data.rect.height-1,data.gridheight do
+    for x = data.rect.x,data.rect.x+data.rect.width-1,data.gridwidth do
+      local id = getId()-(data.idOffset or 0)
+      add(data.zones,{
+        name = data.prefix..tostring(id),
+        bounds = Rectangle{
+          x = x,
+          y = y,
+          width = data.gridwidth,
+          height = data.gridheight,
+        },
+      })
+    end
   end
-
-  local prefix = app.fs.fileTitle(filename)
-  return prefix
 end
 
 -- returns a list of "zones" that fit into the current selection of the active sprite
@@ -222,58 +222,55 @@ end
 -- sel may be non-rectangular (e.g. multiple rectangles)
 --   but support isn't great (e.g. the grid anchor will not reset between
 --   multiple selections)
-local function gatherZones(gridtype, prefix)
-  prefix = prefix or "sprite"
-  local sprite = app.activeSprite
+local function gatherZones(data)
+  local prefix = data.prefix or "sprite"
   local zones = {}
-
-  local sel = sprite.selection
+  local sel = app.activeSprite.selection
   -- rect: the subrectangle to export tiles from
-  local rect = sel.isEmpty and sprite.bounds or sel.bounds
-  local zonew
-  local zoneh
-  if gridtype=="5x5" then
-    zonew = 5
-    zoneh = 5
-    -- if your selection isn't exact multiples of 5, extra tiles will be created
-    -- on the edge. these tiles will be a full 5x5
-  elseif gridtype=="aseprite grid" then
-    zonew = sprite.gridBounds.width
-    zoneh = sprite.gridBounds.height
+  local rect = sel.isEmpty and app.activeSprite.bounds or sel.bounds
+
+  if data.source=="grid" then
     -- selection correction
+    -- if the selection isn't an exact multiples of 5x5,
+    -- the edge tiles will expand to full 5x5
+    local x1 = math.floor(rect.x/data.gridwidth)*data.gridwidth
+    local y1 = math.floor(rect.y/data.gridheight)*data.gridheight
+    local x2 = math.ceil((rect.x+rect.width)/data.gridwidth)*data.gridwidth
+    local y2 = math.ceil((rect.y+rect.height)/data.gridheight)*data.gridheight
     -- pq(rect)
-    local x1 = math.floor(rect.x/zonew)*zonew
-    local y1 = math.floor(rect.y/zoneh)*zoneh
-    local x2 = math.ceil((rect.x+rect.width-1)/zonew)*zonew
-    local y2 = math.ceil((rect.y+rect.height-1)/zoneh)*zoneh
     -- pq(x1,y1,x2,y2)
     rect = Rectangle(x1,y1,x2-x1,y2-y1)
     -- pq(rect)
-  elseif gridtype=="slices" then
-    for i,slice in ipairs(sprite.slices) do
+
+    _gatherZonesFromGrid{
+      zones=zones,
+      prefix=prefix,
+      rect=rect,
+      gridwidth=data.gridwidth,
+      gridheight=data.gridheight,
+    }
+  elseif data.source=="slices" then
+    for i,slice in ipairs(app.activeSprite.slices) do
       if rect:contains(slice.bounds) then
-        add(zones,{
-          name = slice.name:gsub(" ","_"),
-          bounds = slice.bounds,
-        })
+        if data.subdivide then
+          _gatherZonesFromGrid{
+            zones=zones,
+            prefix=slice.name,
+            rect=slice.bounds,
+            gridwidth=data.gridwidth,
+            gridheight=data.gridheight,
+            idOffset=_id+1, -- HACK: make ids start at 0 for each slice
+          }
+        else
+          add(zones,{
+            name = slice.name,
+            bounds = slice.bounds,
+          })
+        end
       end
     end
-    return zones
-  end
-
-  for y = rect.y,rect.y+rect.height-1,zoneh do
-    for x = rect.x,rect.x+rect.width-1,zonew do
-      local name = prefix..getId()
-      add(zones,{
-        name = name,
-        bounds = Rectangle{
-          x = x,
-          y = y,
-          width = zonew,
-          height = zoneh,
-        },
-      })
-    end
+  else
+    assert(nil,"bad source: "..tostring(data.source))
   end
   return zones
 end
@@ -330,26 +327,75 @@ end
 # main
 ]]
 
+
+local hasSlices = #app.activeSprite.slices>0
 local dlg = Dialog("PuzzleScript Export")
+
+-- TODO maybe this visibility stuff would be more understandable as
+-- one tab for slices and one tab for grid. (and modify enabled instead of visible)
+function updateDlgVisibility()
+  dlg:modify{id = 'gridwidth',  visible = dlg.data.source=='grid' or dlg.data.subdivide}
+  dlg:modify{id = 'gridheight', visible = dlg.data.source=='grid' or dlg.data.subdivide}
+  dlg:modify{id = 'subdivide',  visible = dlg.data.source=='slices'}
+  dlg:modify{id = 'prefix',     visible = dlg.data.source=='grid'}
+end
+
 dlg:combobox{
-  id      = "gridtype",
-  label   = "Grid type",
-  option  = defaultGridType(),
-  options = {"5x5", "aseprite grid", "slices"},
+  id       = 'source',
+  label    = 'Source',
+  option   = hasSlices and 'slices' or 'grid',
+  options  = {'grid', 'slices'},
+  onchange = function()
+    updateDlgVisibility()
+  end,
 }
--- dlg:check{
---   id = 'foo',
---   label ='test',
---   onclick=function()
---     dlg:modify{
---       id = "gridtype",
---       enabled= not dlg.data.foo,
---     }
---   end,
--- }
 dlg:check{
-  id       = "layeronly",
-  label    = "Active layer only",
+  id      = 'subdivide',
+  label   = 'Subdivide slices',
+  onclick = function()
+    updateDlgVisibility()
+  end,
+}
+do
+  -- grid size
+  local gb = app.activeSprite.gridBounds
+  local default = gb.width==16 and gb.height==16
+  dlg:number{
+    id       = 'gridwidth',
+    label    = 'Grid size',
+    text     = tostring(default and 5 or gb.width),
+    decimals = 0,
+    -- onchange = function()
+    --   if dlg.data.gridwidth<1 then
+    --     dlg:modify{id='gridwidth', text='1'}
+    --   end
+    -- end
+  }
+  dlg:number{
+    id       = 'gridheight',
+    text     = tostring(default and 5 or gb.height),
+    decimals = 0,
+    -- onchange = function()
+    --   if dlg.data.gridheight<1 then
+    --     dlg:modify{id='gridheight', text='1'}
+    --   end
+    -- end
+  }
+end
+dlg:entry{
+  id       = 'prefix',
+  label    = 'Name prefix',
+  text     = sanitizeName(app.fs.fileTitle(app.activeSprite.filename or 'aseprite')),
+  -- onchange = function()
+  --   dlg:modify{
+  --     id   = 'prefix',
+  --     text = sanitizeName(dlg.data.prefix),
+  --   }
+  -- end,
+}
+dlg:check{
+  id       = 'layeronly',
+  label    = 'Active layer only',
   selected = true,
 }
 dlg:button{text = "&Export", onclick = function()
@@ -358,10 +404,14 @@ dlg:button{text = "&Export", onclick = function()
 
   if not app.activeSprite then return app.alert("error: no sprite found") end
 
-  local gridtype,layeronly = dlg.data.gridtype,dlg.data.layeronly
-  local prefix = choosePrefix(app.activeSprite.filename)
-  local zones = gatherZones(gridtype,prefix)
-  local imgRGB = spriteToRgbImage(layeronly)
+  local zones = gatherZones{
+    source     = dlg.data.source,
+    subdivide  = dlg.data.subdivide,
+    gridwidth  = dlg.data.gridwidth,
+    gridheight = dlg.data.gridheight,
+    prefix     = dlg.data.prefix,
+  }
+  local imgRGB = spriteToRgbImage(dlg.data.layeronly)
   local tiles = exportZones(imgRGB,zones)
 
   -- set output
@@ -382,4 +432,6 @@ dlg:entry{
   focus   = false,
   visible = false,
 }
+
+updateDlgVisibility()
 dlg:show{wait = false}

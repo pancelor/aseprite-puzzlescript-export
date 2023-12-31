@@ -62,11 +62,12 @@ If you select a rectangle in your image and then press the "Export" button, only
 
 ### Export Settings
 
-* `grid type`:
-  * `5x5`: the exporter will export 5x5 tiles.
-  * `aseprite grid`: the exporter will export tiles from the aseprite grid. (View > Grid > Grid Settings)
+* `Source`:
+  * `grid`: the exporter will export 5x5 tiles, or whatever size you set. You'll probably also want to set up aseprite's grid overlay. (View > Grid > Grid Settings)
   * `slices`: the exporter will export the sprite's [slices](https://www.aseprite.org/docs/slices/) -- this lets you name your sprites in Aseprite, instead of needing to rename them after exporting. Recommended for long-term projects.
-* `active layer only`: whether to export visible pixels (default) or just the pixels from the current layer.
+* `Subdivide slices` (slices only): subdivide each slice according to the grid. This lets you export many tiles from a single slice. e.g. "tree" => "tree0", "tree1", "tree2", ...
+* `Name prefix` (grid only): name prefix for the exported tiles.
+* `Active layer only`: whether to export visible pixels or just the pixels from the current layer.
 
 (why would you want non-5x5 sprites? there are [PuzzleScript](https://auroriax.github.io/PuzzleScript/editor.html) [forks](https://github.com/broken-sign-games/PuzzleScript) out there that allow differently-sized sprites)
 
@@ -84,7 +85,7 @@ This script will consider any color with alpha value 0 as transparent. Make sure
 
 ### Feature Wishlist
 
-I might get around to these, or maybe not. (Feel free to open a pull request)
+I probably won't get around to adding these, but I'll collect them here:
 
 - [x] add support for [slices](https://www.aseprite.org/docs/slices/)
 - [x] add support for indexed/palettized images
@@ -93,5 +94,5 @@ I might get around to these, or maybe not. (Feel free to open a pull request)
 - [ ] deduplicate exported tiles
   - [ ] but only in auto-name mode -- identical slices should stay separate
 - [ ] add support for [tilemaps](https://www.aseprite.org/docs/tilemap) for level creation (not just sprite drawing)
-- [ ] regression tests. `{all layers,active layer only}x{3 grid types}x{indexed colormode,rgba}x{tilemap,not}`
+- [ ] regression tests. `{all layers,active layer only}x{2 source types}x{indexed colormode,rgba}x{tilemap,not}`
   - [ ] commandline conversion support
