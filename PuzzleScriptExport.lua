@@ -190,9 +190,15 @@ local function exportZone(img,zone)
     return ""
   end
 
+  if #pal==1 then
+    return zone.name.."\n"..pal[1].."\n"
+  end
+
   if #pal>0 then
     return zone.name.."\n"..table.concat(pal," ").."\n"..body
   end
+
+  return zone.name.."\ntransparent\n"
 end
 
 --[[
