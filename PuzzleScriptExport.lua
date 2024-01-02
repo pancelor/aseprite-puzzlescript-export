@@ -149,6 +149,7 @@ local function exportZone(img,zone)
 
   local pal = {} -- array of colors
   local body = ""
+  local opaque = true
   for y = zone.bounds.y,zone.bounds.y+zone.bounds.height-1 do
     for x = zone.bounds.x,zone.bounds.x+zone.bounds.width-1 do
       -- pqt = x==0 and y==0 and pq or function()end
@@ -171,6 +172,7 @@ local function exportZone(img,zone)
       local code
       if trans then
         code = "."
+  	opaque = false
       else
         local index = find(pal,hexcode)
         if not index then
@@ -190,7 +192,7 @@ local function exportZone(img,zone)
     return ""
   end
 
-  if #pal==1 then
+  if opaque and #pal==1 then
     return zone.name.."\n"..pal[1].."\n"
   end
 
